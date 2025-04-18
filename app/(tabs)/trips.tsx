@@ -82,8 +82,7 @@ export default function TripsScreen() {
     };
 
     const navigateToTrip = (trip: EnrichedTrip) => {
-        // Navigation vers l'écran de détail du voyage
-        router.push(`/trip-details/${trip.id}`);
+        router.push(`/trip-detail?id=${trip.id}`);
     };
 
     const createNewTrip = () => {

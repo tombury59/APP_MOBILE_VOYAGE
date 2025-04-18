@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { StyleSheet, View, TextInput, FlatList, TouchableOpacity, Alert, Image } from 'react-native';
+import { StyleSheet, View, TextInput, FlatList, TouchableOpacity, Alert, Image, Platform } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { db, tripDb, Destination, Activity, Trip as TripModel } from '@/database';
 import { useAuth } from '@/context/AuthContext';
@@ -15,16 +16,24 @@ export default function ExploreScreen() {
         destination: Destination | null;
         activities: Activity[];
         name: string;
+        startDate?: string;
+        endDate?: string;
     }>({
         destination: null,
         activities: [],
-        name: "Mon voyage"
+        name: "Mon voyage",
+        startDate: undefined,
+        endDate: undefined
     });
     const [newActivityText, setNewActivityText] = useState('');
     const [loading, setLoading] = useState(true);
     const [showActivityInput, setShowActivityInput] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isNewTrip, setIsNewTrip] = useState(true);
+
+    // Nouveaux états pour le DatePicker
+    const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+    const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
     // Récupérer l'utilisateur connecté
     const { user } = useAuth();
@@ -57,7 +66,9 @@ export default function ExploreScreen() {
                                 id: existingTrip.id,
                                 destination: destination,
                                 activities: existingTrip.activities,
-                                name: existingTrip.name
+                                name: existingTrip.name,
+                                startDate: existingTrip.startDate,
+                                endDate: existingTrip.endDate
                             });
                             setIsNewTrip(false);
                         }
@@ -67,7 +78,9 @@ export default function ExploreScreen() {
                     setTrip({
                         destination: null,
                         activities: [],
-                        name: "Mon voyage"
+                        name: "Mon voyage",
+                        startDate: undefined,
+                        endDate: undefined
                     });
                     setIsNewTrip(true);
                 }
@@ -101,7 +114,8 @@ export default function ExploreScreen() {
                     activities: trip.activities,
                     createdAt: new Date().toISOString(), // Vous devriez conserver la date de création originale
                     updatedAt: new Date().toISOString(),
-                    startDate: trip.startDate || null
+                    startDate: trip.startDate,
+                    endDate: trip.endDate
                 };
 
                 const success = await tripDb.updateTrip(tripToUpdate);
@@ -116,7 +130,9 @@ export default function ExploreScreen() {
                 const newTrip = await tripDb.createTrip(
                     user.id,
                     trip.destination.id,
-                    trip.name
+                    trip.name,
+                    trip.startDate,
+                    trip.endDate
                 );
 
                 if (newTrip) {
@@ -155,7 +171,45 @@ export default function ExploreScreen() {
         }
     };
 
-    // Reste du code inchangé...
+    // Nouvelles fonctions pour gérer les dates
+    const onStartDateChange = (event, selectedDate) => {
+        const currentDate = selectedDate || (trip.startDate ? new Date(trip.startDate) : new Date());
+        setShowStartDatePicker(Platform.OS === 'ios');
+
+        // Vérifier que la date de début est antérieure à la date de fin
+        if (trip.endDate && new Date(currentDate) > new Date(trip.endDate)) {
+            Alert.alert("Erreur", "La date de début doit être antérieure à la date de fin");
+            return;
+        }
+
+        setTrip(prevTrip => ({
+            ...prevTrip,
+            startDate: currentDate.toISOString()
+        }));
+    };
+
+    const onEndDateChange = (event, selectedDate) => {
+        const currentDate = selectedDate || (trip.endDate ? new Date(trip.endDate) : new Date());
+        setShowEndDatePicker(Platform.OS === 'ios');
+
+        // Vérifier que la date de fin est postérieure à la date de début
+        if (trip.startDate && new Date(currentDate) < new Date(trip.startDate)) {
+            Alert.alert("Erreur", "La date de fin doit être postérieure à la date de début");
+            return;
+        }
+
+        setTrip(prevTrip => ({
+            ...prevTrip,
+            endDate: currentDate.toISOString()
+        }));
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return "Non définie";
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR');
+    };
+
     // Ajouter une activité
     const addActivity = async () => {
         if (!trip.destination) {
@@ -267,7 +321,9 @@ export default function ExploreScreen() {
         setTrip({
             destination: null,
             activities: [],
-            name: "Mon voyage"
+            name: "Mon voyage",
+            startDate: undefined,
+            endDate: undefined
         });
         setIsNewTrip(true);
     };
@@ -303,7 +359,6 @@ export default function ExploreScreen() {
                     </View>
                 </View>
 
-                {/* Le reste de votre code reste inchangé */}
                 {/* Nom du voyage */}
                 <View style={styles.tripNameContainer}>
                     <TextInput
@@ -313,6 +368,58 @@ export default function ExploreScreen() {
                         placeholder="Nom du voyage"
                     />
                 </View>
+
+                {/* Nouveau bloc pour les dates */}
+                <View style={styles.datePickersContainer}>
+                    <TouchableOpacity
+                        style={styles.datePicker}
+                        onPress={() => setShowStartDatePicker(true)}
+                    >
+                        <View style={styles.datePickerContent}>
+                            <Ionicons name="calendar-outline" size={20} color="#4ca5ff" />
+                            <View style={styles.dateTextContainer}>
+                                <ThemedText style={styles.dateLabel}>Date de début</ThemedText>
+                                <ThemedText style={styles.dateValue}>
+                                    {trip.startDate ? formatDate(trip.startDate) : "Non définie"}
+                                </ThemedText>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.datePicker}
+                        onPress={() => setShowEndDatePicker(true)}
+                    >
+                        <View style={styles.datePickerContent}>
+                            <Ionicons name="calendar-outline" size={20} color="#4ca5ff" />
+                            <View style={styles.dateTextContainer}>
+                                <ThemedText style={styles.dateLabel}>Date de fin</ThemedText>
+                                <ThemedText style={styles.dateValue}>
+                                    {trip.endDate ? formatDate(trip.endDate) : "Non définie"}
+                                </ThemedText>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* DatePickers */}
+                {showStartDatePicker && (
+                    <DateTimePicker
+                        value={trip.startDate ? new Date(trip.startDate) : new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={onStartDateChange}
+                    />
+                )}
+
+                {showEndDatePicker && (
+                    <DateTimePicker
+                        value={trip.endDate ? new Date(trip.endDate) : new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={onEndDateChange}
+                    />
+                )}
 
                 {/* Sélection de destination */}
                 <TouchableOpacity
@@ -471,6 +578,35 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         borderWidth: 1,
         borderColor: '#e5e7ea',
+    },
+    datePickersContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 15,
+    },
+    datePicker: {
+        flex: 1,
+        backgroundColor: '#f5f7fa',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#e5e7ea',
+        padding: 12,
+        marginHorizontal: 5,
+    },
+    datePickerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    dateTextContainer: {
+        marginLeft: 10,
+    },
+    dateLabel: {
+        fontSize: 12,
+        color: '#888',
+    },
+    dateValue: {
+        fontSize: 14,
+        fontWeight: '500',
     },
     destinationSelector: {
         backgroundColor: '#f5f7fa',
