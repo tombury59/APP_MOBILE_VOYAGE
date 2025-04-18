@@ -14,21 +14,24 @@ export default function ProfilScreen() {
     const router = useRouter();
     const { logout, user } = useAuth();
     const [tripCount, setTripCount] = useState(0);
-
+    const [activityCount, setActivityCount] = useState(0);
     useEffect(() => {
-        // Charger le nombre de voyages de l'utilisateur
-        const loadTripCount = async () => {
+        // Charger le nombre de voyages et d'activités de l'utilisateur
+        const loadUserData = async () => {
             if (user) {
                 try {
                     const userTrips = await tripDb.getTripsByUserId(user.id);
                     setTripCount(userTrips.length);
+
+                    const totalActivities = userTrips.reduce((count, trip) => count + trip.activities.length, 0);
+                    setActivityCount(totalActivities);
                 } catch (error) {
-                    console.error('Erreur lors du chargement des voyages:', error);
+                    console.error('Erreur lors du chargement des données utilisateur:', error);
                 }
             }
         };
 
-        loadTripCount();
+        loadUserData();
     }, [user]);
 
     const handleLogout = () => {
@@ -161,8 +164,8 @@ export default function ProfilScreen() {
                             </View>
 
                             <View style={styles.statCard}>
-                                <ThemedText style={styles.statValue}>0</ThemedText>
-                                <ThemedText style={styles.statLabel}>Favoris</ThemedText>
+                                <ThemedText style={styles.statValue}>{activityCount}</ThemedText>
+                                <ThemedText style={styles.statLabel}>Activités</ThemedText>
                             </View>
 
                             <View style={styles.statCard}>
@@ -352,11 +355,13 @@ const styles = StyleSheet.create({
     quickActionsSection: {
         paddingHorizontal: 20,
         paddingTop: 10,
-        paddingBottom: 30,
+        paddingBottom: 80, // Augmentez l'espace pour éviter tout chevauchement
+        position: 'relative', // Assurez une position correcte
     },
     actionButtonsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        zIndex: 10, // Place les boutons au-dessus
     },
     actionButton: {
         flex: 1,

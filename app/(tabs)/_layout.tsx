@@ -47,6 +47,14 @@ function TabLayout() {
             />
 
             <Tabs.Screen
+                name="trips"
+                options={{
+                    title: 'Mes Trips',
+                    tabBarIcon: ({ color }) => <IconSymbol size={28} name="airplane" color={color} />,
+                }}
+            />
+
+            <Tabs.Screen
                 name="explore"
                 options={{
                     title: 'Prévoir un trip',
@@ -54,13 +62,7 @@ function TabLayout() {
                 }}
             />
 
-            <Tabs.Screen
-                name="trips"
-                options={{
-                    title: 'Mes Trips',
-                    tabBarIcon: ({ color }) => <IconSymbol size={28} name="airplane" color={color} />,
-                }}
-            />
+
 
             <Tabs.Screen
                 name="profil"
