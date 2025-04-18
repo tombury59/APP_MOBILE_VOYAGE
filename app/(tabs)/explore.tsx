@@ -8,47 +8,18 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { db, tripDb, Destination, Activity, Trip as TripModel } from '@/database';
 import { useAuth } from '@/context/AuthContext';
 import { router, useLocalSearchParams } from 'expo-router';
-import { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
-// Fonction d'aide pour formater les dates de manière plus lisible
-const formatDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return "Non définie";
+import TripMap from '@/components/voyage/TripMap';
+import DateSelector from '@/components/voyage/DateSelector';
+import DestinationSelector from '@/components/voyage/DestinationSelector';
 
-    const date = new Date(dateString);
-
-    // Vérification de la validité de la date
-    if (isNaN(date.getTime())) return "Date invalide";
-
-    // Obtenir les noms des mois en français
-    const months = [
-        'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
-    ];
-
-    const day = date.getDate();
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-
-    return `${day} ${month} ${year}`;
-};
-
-// Fonction pour calculer la durée du séjour
-const calculateDuration = (startDate: string | undefined, endDate: string | undefined): string => {
-    if (!startDate || !endDate) return '';
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    // Vérifier la validité des dates
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
-
-    // Calculer la différence en jours
-    const durationMs = end.getTime() - start.getTime();
-    const days = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
-
-    if (days === 0) return '(même jour)';
-    if (days === 1) return '(1 jour)';
-    return `(${days} jours)`;
+type Step = {
+    id: number;
+    latitude: number;
+    longitude: number;
+    title: string;
+    description?: string;
+    order: number;
 };
 
 export default function ExploreScreen() {
@@ -67,15 +38,13 @@ export default function ExploreScreen() {
         startDate: undefined,
         endDate: undefined
     });
-    const [newActivityText, setNewActivityText] = useState('');
+
     const [loading, setLoading] = useState(true);
     const [showActivityInput, setShowActivityInput] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isNewTrip, setIsNewTrip] = useState(true);
 
-    // États pour les DatePickers
-    const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-    const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
 
     // Nouvel état pour afficher le modal de sélection de dates sur iOS
     const [showDateModal, setShowDateModal] = useState(false);
@@ -217,174 +186,6 @@ export default function ExploreScreen() {
         }
     };
 
-    // Fonctions améliorées pour gérer les dates
-    const openDatePicker = (mode: 'start' | 'end') => {
-        setDatePickerMode(mode);
-        setTempDate(null);
-        if (Platform.OS === 'ios') {
-            setShowDateModal(true);
-        } else {
-            if (mode === 'start') {
-                setShowStartDatePicker(true);
-            } else {
-                setShowEndDatePicker(true);
-            }
-        }
-    };
-
-
-    const onStartDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-        setShowStartDatePicker(Platform.OS === 'ios' ? true : false);
-
-        if (event.type === 'dismissed') {
-            return;
-        }
-
-        if (!selectedDate) return;
-
-        const currentDate = selectedDate;
-
-        if (trip.endDate && new Date(currentDate) > new Date(trip.endDate)) {
-            Alert.alert("Attention", "La date de début est postérieure à la date de fin. La date de fin sera ajustée.");
-
-            const newEndDate = new Date(currentDate);
-            newEndDate.setDate(newEndDate.getDate() + 1);
-
-            setTrip(prevTrip => ({
-                ...prevTrip,
-                startDate: currentDate.toISOString(),
-                endDate: newEndDate.toISOString()
-            }));
-        } else {
-            setTrip(prevTrip => ({
-                ...prevTrip,
-                startDate: currentDate.toISOString()
-            }));
-        }
-
-        if (Platform.OS === 'ios') {
-            setShowDateModal(false);
-        }
-    };
-
-    const onEndDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-        setShowEndDatePicker(Platform.OS === 'ios' ? true : false);
-
-        if (event.type === 'dismissed') {
-            return;
-        }
-
-        if (!selectedDate) return;
-
-        const currentDate = selectedDate;
-
-        if (trip.startDate && new Date(currentDate) < new Date(trip.startDate)) {
-            Alert.alert("Attention", "La date de fin est antérieure à la date de début. La date de début sera ajustée.");
-
-            const newStartDate = new Date(currentDate);
-            newStartDate.setDate(newStartDate.getDate() - 1);
-
-            setTrip(prevTrip => ({
-                ...prevTrip,
-                startDate: newStartDate.toISOString(),
-                endDate: currentDate.toISOString()
-            }));
-        } else {
-            setTrip(prevTrip => ({
-                ...prevTrip,
-                endDate: currentDate.toISOString()
-            }));
-        }
-
-        if (Platform.OS === 'ios') {
-            setShowDateModal(false);
-        }
-    };
-
-    const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-        if (datePickerMode === 'start') {
-            onStartDateChange(event, selectedDate);
-        } else {
-            onEndDateChange(event, selectedDate);
-        }
-    };
-
-    // Ajouter une activité
-    const addActivity = async () => {
-        if (!trip.destination) {
-            Alert.alert("Erreur", "Veuillez d'abord sélectionner une destination");
-            return;
-        }
-
-        if (newActivityText.trim() === '') {
-            Alert.alert("Erreur", "Veuillez entrer une activité");
-            return;
-        }
-
-        const newActivity: Activity = {
-            id: Date.now(),
-            text: newActivityText,
-            completed: false
-        };
-
-        // Ajouter l'activité localement
-        setTrip(prevTrip => ({
-            ...prevTrip,
-            activities: [...prevTrip.activities, newActivity]
-        }));
-
-        // Si le voyage existe déjà dans la base de données, mettre à jour
-        if (trip.id && user && !isNewTrip) {
-            await tripDb.addActivityToTrip(trip.id, newActivityText);
-        }
-
-        setNewActivityText('');
-        setShowActivityInput(false);
-    };
-
-    // Supprimer une activité
-    const deleteActivity = async (id: number) => {
-        // Supprimer l'activité localement
-        setTrip(prevTrip => ({
-            ...prevTrip,
-            activities: prevTrip.activities.filter(activity => activity.id !== id)
-        }));
-
-        // Si le voyage existe déjà dans la base de données, mettre à jour
-        if (trip.id && user && !isNewTrip) {
-            await tripDb.removeActivityFromTrip(trip.id, id);
-        }
-    };
-
-    // Marquer une activité comme complétée
-    const toggleActivityCompletion = async (id: number) => {
-        // Mettre à jour localement
-        const updatedActivities = trip.activities.map(activity =>
-            activity.id === id ? {...activity, completed: !activity.completed} : activity
-        );
-
-        setTrip(prevTrip => ({
-            ...prevTrip,
-            activities: updatedActivities
-        }));
-
-        // Si le voyage existe déjà dans la base de données, mettre à jour
-        if (trip.id && user && !isNewTrip) {
-            const activity = trip.activities.find(a => a.id === id);
-            if (activity) {
-                await tripDb.updateActivityStatus(trip.id, id, !activity.completed);
-            }
-        }
-    };
-
-    // Sélectionner une destination
-    const selectDestination = (destination: Destination) => {
-        setTrip(prevTrip => ({
-            ...prevTrip,
-            destination: destination
-        }));
-    };
-
     // Modifier le nom du voyage
     const updateTripName = (name: string) => {
         setTrip(prevTrip => ({
@@ -393,27 +194,6 @@ export default function ExploreScreen() {
         }));
     };
 
-    // Afficher le sélecteur de destination
-    const showDestinationPicker = () => {
-        Alert.alert(
-            "Sélectionner une destination",
-            "Choisissez votre destination",
-            availableDestinations.map(destination => ({
-                text: destination.name,
-                onPress: () => selectDestination(destination)
-            })),
-            { cancelable: true }
-        );
-    };
-
-    // Afficher le formulaire d'ajout d'activité
-    const toggleActivityInput = () => {
-        if (!trip.destination) {
-            Alert.alert("Erreur", "Veuillez d'abord sélectionner une destination");
-            return;
-        }
-        setShowActivityInput(!showActivityInput);
-    };
 
     // Créer un nouveau voyage vide
     const resetTrip = () => {
@@ -428,6 +208,8 @@ export default function ExploreScreen() {
     };
 
     const [tempDate, setTempDate] = useState<Date | null>(null);
+    const [selectedStep, setSelectedStep] = useState<Step | null>(null);
+    const [steps, setSteps] = useState<Step[]>([]);
 
     // Afficher le modal de date pour iOS
     const renderDateModal = () => {
@@ -534,198 +316,36 @@ export default function ExploreScreen() {
                 </View>
 
                 {/* Sélection de destination */}
-                <TouchableOpacity
-                    style={styles.destinationSelector}
-                    onPress={showDestinationPicker}
-                >
-                    {trip.destination ? (
-                        <View style={styles.selectedDestination}>
-                            <View style={styles.destinationImageContainer}>
-                                <Image
-                                    source={{ uri: trip.destination.image }}
-                                    style={styles.destinationImage}
-                                    resizeMode="cover"
-                                />
-                            </View>
-                            <View style={styles.destinationDetails}>
-                                <ThemedText style={styles.destinationName}>
-                                    {trip.destination.name}
-                                </ThemedText>
-                                <View style={styles.locationContainer}>
-                                    <Ionicons name="location-outline" size={16} color="#666" />
-                                    <ThemedText style={styles.locationText}>
-                                        {trip.destination.location}
-                                    </ThemedText>
-                                </View>
-                            </View>
-                            <TouchableOpacity style={styles.changeButton} onPress={showDestinationPicker}>
-                                <ThemedText style={styles.changeButtonText}>Changer</ThemedText>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <View style={styles.destinationPlaceholder}>
-                            <Ionicons name="add-circle-outline" size={24} color="#4ca5ff" />
-                            <ThemedText style={styles.placeholderText}>Sélectionner une destination</ThemedText>
-                        </View>
-                    )}
-                </TouchableOpacity>
+                <DestinationSelector
+                    destination={trip.destination}
+                    availableDestinations={availableDestinations}
+                    onDestinationSelected={(destination) =>
+                        setTrip(prevTrip => ({
+                            ...prevTrip,
+                            destination: destination
+                        }))
+                    }
+                />
 
-                {/* Bloc amélioré pour les dates */}
-                <View style={styles.dateSection}>
-                    <View style={styles.dateSectionHeader}>
-                        <Ionicons name="calendar" size={18} color="#4ca5ff" />
-                        <ThemedText style={styles.dateSectionTitle}>Dates du voyage</ThemedText>
-                    </View>
+                {/* Bloc pour les dates */}
+                <DateSelector
+                    startDate={trip.startDate}
+                    endDate={trip.endDate}
+                    onStartDateChange={(date) => setTrip(prev => ({ ...prev, startDate: date }))}
+                    onEndDateChange={(date) => setTrip(prev => ({ ...prev, endDate: date }))}
+                />
 
-                    <View style={styles.datePickersContainer}>
-                        <TouchableOpacity
-                            style={styles.datePicker}
-                            onPress={() => openDatePicker('start')}
-                        >
-                            <View style={styles.datePickerContent}>
-                                <Ionicons name="calendar-outline" size={20} color="#4ca5ff" />
-                                <View style={styles.dateTextContainer}>
-                                    <ThemedText style={styles.dateLabel}>Départ</ThemedText>
-                                    <ThemedText style={styles.dateValue}>
-                                        {formatDate(trip.startDate)}
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
+                {/* Affichage de la map et des étapes */}
+                {/*<TripMap*/}
+                {/*    initialSteps={steps}*/}
+                {/*    onStepsChange={setSteps}*/}
+                {/*    readonly={false}*/}
+                {/*/>*/}
 
-                        <TouchableOpacity
-                            style={styles.datePicker}
-                            onPress={() => openDatePicker('end')}
-                        >
-                            <View style={styles.datePickerContent}>
-                                <Ionicons name="calendar-outline" size={20} color="#4ca5ff" />
-                                <View style={styles.dateTextContainer}>
-                                    <ThemedText style={styles.dateLabel}>Retour</ThemedText>
-                                    <ThemedText style={styles.dateValue}>
-                                        {formatDate(trip.endDate)}
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Afficher la durée du voyage si les deux dates sont définies */}
-                    {trip.startDate && trip.endDate && (
-                        <View style={styles.durationContainer}>
-                            <Ionicons name="time-outline" size={16} color="#666" />
-                            <ThemedText style={styles.durationText}>
-                                Durée: {calculateDuration(trip.startDate, trip.endDate)}
-                            </ThemedText>
-                        </View>
-                    )}
-                </View>
-
-                {/* DatePickers */}
-                {showStartDatePicker && Platform.OS === 'android' && (
-                    <DateTimePicker
-                        value={trip.startDate ? new Date(trip.startDate) : new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={onStartDateChange}
-                    />
-                )}
-
-                {showEndDatePicker && Platform.OS === 'android' && (
-                    <DateTimePicker
-                        value={trip.endDate ? new Date(trip.endDate) : new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={onEndDateChange}
-                    />
-                )}
-
-                {/* Modal pour iOS */}
-                {Platform.OS === 'ios' && renderDateModal()}
-
-
-
-                {/* Liste des activités */}
-                <View style={styles.activitiesContainer}>
-                    <View style={styles.activitiesHeader}>
-                        <ThemedText style={styles.activitiesTitle}>Activités</ThemedText>
-                        <View style={styles.activitiesHeaderRight}>
-                            <ThemedText style={styles.activitiesCount}>
-                                {trip.activities.length} activité{trip.activities.length !== 1 ? 's' : ''} prévue{trip.activities.length !== 1 ? 's' : ''}
-                            </ThemedText>
-                            <TouchableOpacity
-                                style={styles.addActivityButton}
-                                onPress={toggleActivityInput}
-                                disabled={!trip.destination}
-                            >
-                                <Ionicons name="add-circle" size={24} color={trip.destination ? "#4ca5ff" : "#bbb"} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {showActivityInput && (
-                        <View style={styles.addActivityInputContainer}>
-                            <TextInput
-                                style={styles.activityInput}
-                                placeholder="Ajouter une activité..."
-                                value={newActivityText}
-                                onChangeText={setNewActivityText}
-                                autoFocus
-                            />
-                            <TouchableOpacity
-                                style={[styles.addButton, newActivityText.trim() === '' ? styles.disabledButton : null]}
-                                onPress={addActivity}
-                                disabled={newActivityText.trim() === ''}
-                            >
-                                <Ionicons name="checkmark" size={24} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {trip.activities.length > 0 ? (
-                        <FlatList
-                            data={trip.activities}
-                            renderItem={({ item }) => (
-                                <View style={styles.activityItem}>
-                                    <TouchableOpacity
-                                        style={styles.activityCheckbox}
-                                        onPress={() => toggleActivityCompletion(item.id)}
-                                    >
-                                        <Ionicons
-                                            name={item.completed ? "checkmark-circle" : "ellipse-outline"}
-                                            size={24}
-                                            color={item.completed ? "#4ca5ff" : "#ccc"}
-                                        />
-                                    </TouchableOpacity>
-                                    <ThemedText style={[
-                                        styles.activityText,
-                                        item.completed ? styles.completedActivityText : null
-                                    ]}>
-                                        {item.text}
-                                    </ThemedText>
-                                    <TouchableOpacity
-                                        style={styles.deleteButton}
-                                        onPress={() => deleteActivity(item.id)}
-                                    >
-                                        <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                            keyExtractor={item => item.id.toString()}
-                            style={styles.activitiesList}
-                        />
-                    ) : (
-                        <View style={styles.emptyList}>
-                            <ThemedText style={styles.emptyListText}>
-                                Aucune activité planifiée
-                            </ThemedText>
-                        </View>
-                    )}
-                </View>
             </ThemedView>
         </ProtectedRoute>
     );
 }
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -765,67 +385,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e5e7ea',
     },
-    dateSection: {
-        backgroundColor: '#f5f7fa',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#e5e7ea',
-        padding: 15,
-        marginBottom: 15,
-    },
-    dateSectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    dateSectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-    datePickersContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    datePicker: {
-        flex: 1,
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#e5e7ea',
-        padding: 12,
-        marginHorizontal: 5,
-    },
-    datePickerContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    dateTextContainer: {
-        marginLeft: 10,
-    },
-    dateLabel: {
-        fontSize: 12,
-        color: '#888',
-    },
-    dateValue: {
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    durationContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingTop: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#e5e7ea',
-        marginTop: 8,
-    },
-    durationText: {
-        fontSize: 14,
-        color: '#666',
-        marginLeft: 5,
-    },
+    // Les styles de modal sont conservés car ils sont encore utilisés dans le code actuel
     dateModalContainer: {
         position: 'absolute',
         top: 0,
@@ -861,6 +421,12 @@ const styles = StyleSheet.create({
     dateModalCloseButton: {
         padding: 5,
     },
+    datePickerWrapper: {
+        backgroundColor: '#fff',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     dateModalConfirmButton: {
         backgroundColor: '#4ca5ff',
         paddingVertical: 12,
@@ -868,163 +434,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 15,
     },
-    selectedDestination: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    destinationPlaceholder: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-    },
-    placeholderText: {
-        marginLeft: 10,
-        fontSize: 16,
-        color: '#4ca5ff',
-    },
-    destinationImageContainer: {
-        marginRight: 15,
-    },
-    destinationImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 8,
-        backgroundColor: '#eee',
-    },
-    destinationDetails: {
-        flex: 1,
-    },
-    destinationName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 5,
-    },
-    locationContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    locationText: {
-        marginLeft: 5,
-        fontSize: 14,
-        color: '#666',
-    },
-    changeButton: {
-        backgroundColor: '#f0f4ff',
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-    },
-    changeButtonText: {
-        color: '#4ca5ff',
-        fontSize: 14,
-    },
-    activitiesContainer: {
-        flex: 1,
-        backgroundColor: '#f5f7fa',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-    },
-    activitiesHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    activitiesHeaderRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    activitiesTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    activitiesCount: {
-        fontSize: 14,
-        color: '#888',
-        marginRight: 10,
-    },
-    addActivityButton: {
-        padding: 5,
-    },
-    activitiesList: {
-        flex: 1,
-    },
-    activityItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    activityCheckbox: {
-        marginRight: 10,
-    },
-    activityText: {
-        flex: 1,
-        fontSize: 16,
-    },
-    completedActivityText: {
-        textDecorationLine: 'line-through',
-        color: '#999',
-    },
-    deleteButton: {
-        padding: 5,
-    },
-    emptyList: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 30,
-    },
-    emptyListText: {
-        color: '#999',
-        fontSize: 16,
-    },
-    addActivityInputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    activityInput: {
-        flex: 1,
-        height: 46,
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        paddingHorizontal: 15,
-        marginRight: 10,
-        fontSize: 16,
-    },
-    addButton: {
-        width: 46,
-        height: 46,
-        backgroundColor: '#4ca5ff',
-        borderRadius: 23,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    disabledButton: {
-        backgroundColor: '#bbb',
-    },
-    datePickerWrapper: {
-        backgroundColor: '#fff',
-        width: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     dateModalConfirmText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
-    },
-    destinationSelector: {
-        backgroundColor: '#f5f7fa',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#e5e7ea',
-        padding: 15,
-        marginBottom: 15,
-    },
-
+    }
 });

@@ -104,6 +104,7 @@ class DatabaseManager {
         }
     }
 
+
     async getDestinations(): Promise<Destination[]> {
         try {
             const data = await AsyncStorage.getItem(this.STORAGE_KEY);
@@ -357,6 +358,75 @@ class TripManager {
         } catch (error) {
             console.error('Erreur lors de l\'initialisation de la base des voyages:', error);
         }
+    }
+
+    async addStepToTrip(tripId: number, title: string, description: string, latitude: number, longitude: number, order: number): Promise<number> {
+        return new Promise((resolve, reject) => {
+            this.db.transaction(tx => {
+                tx.executeSql(
+                    'INSERT INTO steps (trip_id, title, description, latitude, longitude, order_index) VALUES (?, ?, ?, ?, ?, ?)',
+                    [tripId, title, description, latitude, longitude, order],
+                    (_, result) => {
+                        resolve(result.insertId);
+                    },
+                    (_, error) => {
+                        reject(error);
+                        return false;
+                    }
+                );
+            });
+        });
+    }
+
+// Récupérer toutes les étapes d'un voyage
+    async getStepsForTrip(tripId: number): Promise<Step[]> {
+        return new Promise((resolve, reject) => {
+            this.db.transaction(tx => {
+                tx.executeSql(
+                    'SELECT * FROM steps WHERE trip_id = ? ORDER BY order_index ASC',
+                    [tripId],
+                    (_, result) => {
+                        const steps: Step[] = [];
+                        for (let i = 0; i < result.rows.length; i++) {
+                            const item = result.rows.item(i);
+                            steps.push({
+                                id: item.id,
+                                tripId: item.trip_id,
+                                title: item.title,
+                                description: item.description,
+                                latitude: item.latitude,
+                                longitude: item.longitude,
+                                order: item.order_index
+                            });
+                        }
+                        resolve(steps);
+                    },
+                    (_, error) => {
+                        reject(error);
+                        return false;
+                    }
+                );
+            });
+        });
+    }
+
+// Supprimer toutes les étapes d'un voyage
+    async deleteAllStepsForTrip(tripId: number): Promise<boolean> {
+        return new Promise((resolve, reject) => {
+            this.db.transaction(tx => {
+                tx.executeSql(
+                    'DELETE FROM steps WHERE trip_id = ?',
+                    [tripId],
+                    (_, result) => {
+                        resolve(true);
+                    },
+                    (_, error) => {
+                        reject(error);
+                        return false;
+                    }
+                );
+            });
+        });
     }
 
     async getTrips(): Promise<Trip[]> {

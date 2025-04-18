@@ -92,8 +92,8 @@ export default function TripsScreen() {
 
     const renderTripItem = ({ item }: { item: EnrichedTrip }) => (
         <TouchableOpacity
-            style={styles.tripCard}
-            onPress={() => navigateToTrip(item)}
+            style={styles.tripItem}
+            onPress={() => router.push(`/explore?tripId=${item.id}`)}
         >
             <View style={styles.tripImageContainer}>
                 {item.destination && (
@@ -125,7 +125,7 @@ export default function TripsScreen() {
                     <View style={styles.statItem}>
                         <Ionicons name="checkmark-circle-outline" size={16} color="#666" />
                         <ThemedText style={styles.statText}>
-                            {item.activities.filter(a => a.completed).length}/{item.activities.length} activités
+                            {item.activities.filter(a => a.completed).length}/{item.activities.length} étapes
                         </ThemedText>
                     </View>
                 </View>
